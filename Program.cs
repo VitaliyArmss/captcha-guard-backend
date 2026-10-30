@@ -8,6 +8,20 @@ using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Production frontends hosted on a different origin must be explicitly allow-listed.
+// Configure Cors:AllowedOrigins as an array of exact origins (scheme + host + optional port).
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? Array.Empty<string>();
+
+        if (allowedOrigins.Length > 0)
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod();
+    });
+});
+
 builder.Services.AddHttpClient("Turnstile", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(12);
@@ -37,6 +51,8 @@ app.Use(async (context, next) =>
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     await next();
 });
+app.UseRouting();
+app.UseCors("Frontend");
 app.UseRateLimiter();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
